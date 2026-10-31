@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FocusFlow — Smart Study & Task Planner</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 2rem 1rem; min-height: 100vh; }
+    .container { max-width: 540px; width: 100%; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; color: var(--accent); }
+    p.subtitle { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .card { background: var(--card); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.25rem; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+    .timer-display { font-size: 4rem; font-weight: 700; text-align: center; margin: 1rem 0; letter-spacing: 2px; }
+    .btn-group { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+    button { background: var(--accent); color: #0f172a; border: none; padding: 0.6rem 1.1rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.9; }
+    button.secondary { background: #334155; color: var(--text); }
+    button.danger { background: var(--danger); color: var(--text); }
+    .input-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    input, select { background: #0f172a; border: 1px solid #334155; color: var(--text); padding: 0.6rem; border-radius: 8px; flex: 1; }
+    ul { list-style: none; }
+    li { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; }
+    li.done span { text-decoration: line-through; color: var(--muted); }
+    .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: #334155; margin-left: 0.5rem; }
+    .stats { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>FocusFlow Planner</h1>
+    <p class="subtitle">Distraction-free Pomodoro timer & prioritized task tracker</p>
+
+    <div class="card">
+      <div class="btn-group">
+        <button class="secondary" onclick="setMode(25)">25m Focus</button>
+        <button class="secondary" onclick="setMode(5)">5m Short Break</button>
+        <button class="secondary" onclick="setMode(15)">15m Long Break</button>
+      </div>
+      <div class="timer-display" id="timer">25:00</div>
+      <div class="btn-group">
+        <button id="startBtn" onclick="toggleTimer()">Start</button>
+        <button class="secondary" onclick="resetTimer()">Reset</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="input-row">
+        <input type="text" id="taskInput" placeholder="Add a study task (e.g., Read Chapter 4)..." />
+        <select id="priorityInput" style="flex:0.4;">
+          <option value="High">High</option>
+          <option value="Med">Med</option>
+          <option value="Low">Low</option>
+        </select>
+        <button onclick="addTask()">Add</button>
+      </div>
+      <ul id="taskList"></ul>
+      <div class="stats">
+        <span id="taskCount">0 tasks remaining</span>
+        <span style="cursor:pointer;color:var(--accent);" onclick="clearCompleted()">Clear Completed</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let defaultTime = 25 * 60;
+    let timeLeft = defaultTime;
+    let timerId = null;
+
+    function updateDisplay() {
+      const m = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+      const s = String(timeLeft % 60).padStart(2, '0');
+      document.getElementById('timer').textContent = `${m}:${s}`;
+    }
+
+    function setMode(minutes) {
+      clearInterval(timerId);
+      timerId = null;
+      document.getElementById('startBtn').textContent = 'Start';
+      defaultTime = minutes * 60;
+      timeLeft = defaultTime;
+      updateDisplay();
+    }
+
+    function toggleTimer() {
+      const btn = document.getElementById('startBtn');
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+        btn.textContent = 'Start';
+      } else {
+        btn.textContent = 'Pause';
+        timerId = setInterval(() => {
+          if (timeLeft > 0) {
+            timeLeft--;
+            updateDisplay();
+          } else {
+            clearInterval(timerId);
+            timerId = null;
+            btn.textContent = 'Start';
+            alert('Session complete! Time to switch modes.');
+          }
+        }, 1000);
+      }
+    }
+
+    function resetTimer() {
+      setMode(defaultTime / 60);
+    }
+
+    let tasks = JSON.parse(localStorage.getItem('focusTasks') || '[]');
+
+    function saveAndRender() {
+      localStorage.setItem('focusTasks', JSON.stringify(tasks));
+      const list = document.getElementById('taskList');
+      list.innerHTML = '';
+      tasks.forEach((t, i) => {
+        const li = document.createElement('li');
+        if (t.done) li.className = 'done';
+        li.innerHTML = `
+          <div onclick="toggleTask(${i})" style="cursor:pointer;flex:1;">
+            <span>${t.text}</span>
+            <span class="badge">${t.priority}</span>
+          </div>
+          <button class="danger" style="padding:0.3rem 0.6rem;font-size:0.75rem;" onclick="deleteTask(${i})">✕</button>
+        `;
+        list.appendChild(li);
+      });
+      const remaining = tasks.filter(t => !t.done).length;
+      document.getElementById('taskCount').textContent = `${remaining} task(s) remaining`;
+    }
+
+    function addTask() {
+      const input = document.getElementById('taskInput');
+      const priority = document.getElementById('priorityInput').value;
+      const text = input.value.trim();
+      if (!text) return;
+      tasks.push({ text, priority, done: false });
+      input.value = '';
+      saveAndRender();
+    }
+
+    function toggleTask(index) {
+      tasks[index].done = !tasks[index].done;
+      saveAndRender();
+    }
+
+    function deleteTask(index) {
+      tasks.splice(index, 1);
+      saveAndRender();
+    }
+
+    function clearCompleted() {
+      tasks = tasks.filter(t => !t.done);
+      saveAndRender();
+    }
+
+    saveAndRender();
+  </script>
+</body>
+</html>
